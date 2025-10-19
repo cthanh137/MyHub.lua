@@ -11,10 +11,10 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- ⚙️ Cấu hình
-local MIN_PLAYER_COUNT = 8     -- Số người tối thiểu
+local MIN_PLAYER_COUNT = 1     -- Số người tối thiểu
 local MAX_PLAYER_COUNT = 18    -- Số người tối đa
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 100          -- Giới hạn số trang quét
+local MAX_PAGES = 50        -- Giới hạn số trang quét
 local RETRY_DELAY = 1         -- Thời gian lặp lại (giây)
 
 -- 🔍 Hàm lấy danh sách server
