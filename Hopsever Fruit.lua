@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local MIN_PLAYER_COUNT = 5
 local MAX_PLAYER_COUNT = 18
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 200
+local MAX_PAGES = 100
 local RETRY_DELAY = 0.1 -- tăng delay để tránh spam request
 
 local triedServers = {} -- lưu server đã thử
@@ -22,7 +22,7 @@ local function GetServers(placeId)
         pageCount += 1
         if pageCount > MAX_PAGES then break end
 
-        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?limit=120&cursor=%s", placeId, cursor)
+        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?limit=100&cursor=%s", placeId, cursor)
         local success, response = pcall(function()
             return request({ Url = url, Method = "GET" })
         end)
