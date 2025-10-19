@@ -30,8 +30,8 @@ local TARGET_FRUITS = {
 
 -- Behavior tuning
 local PLACE_ID     = game.PlaceId
-local MAX_PAGES    = 1
-local RETRY_DELAY  = 0.05         -- nhỏ, retry nhanh để giảm khả năng fail
+local MAX_PAGES    = 50
+local RETRY_DELAY  = 0.01       -- nhỏ, retry nhanh để giảm khả năng fail
 local HOP_COOLDOWN = 0.1          -- nghỉ chút trước khi teleport (an toàn)
 local MIN_SECONDS_BETWEEN_WEBHOOKS = 1.0
 local lastWebhookTick = 0
