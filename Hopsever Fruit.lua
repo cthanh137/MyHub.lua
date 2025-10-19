@@ -1,35 +1,57 @@
+--[[
+    ⚡ INTELLIGENT SERVER HOP (NO PLAYER LIMIT)
+    ✅ Nhảy sang server bất kỳ còn chỗ trống
+    ✅ Không giới hạn số người (chỉ cần chưa full)
+    ✅ Lưu server đã thử để tránh quay lại
+    ✅ Tự retry nếu request lỗi
+]]
+
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Đảm bảo đã lấy được LocalPlayer
 if not LocalPlayer then
     Players.LocalPlayerAdded:Wait()
     LocalPlayer = Players.LocalPlayer
 end
 
--- ⚙️ Cấu hình
-local MIN_PLAYER_COUNT = 10
-local MAX_PLAYER_COUNT = 18
+-- ⚙️ CONFIG
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 50
-local RETRY_DELAY = 2 -- Tăng delay một chút để an toàn hơn
+local MAX_PAGES = 100
+local RETRY_DELAY = 0.01
+local MAX_RETRIES = 10
 
--- Lấy danh sách server đã thử từ session trước
+-- 🧠 Lấy danh sách server đã thử
 local triedServers = TeleportService:GetTeleportSetting("TriedServersList")
-
--- Nếu không có danh sách (lần chạy đầu) hoặc data hỏng, tạo bảng mới
 if typeof(triedServers) ~= "table" then
     triedServers = {}
 end
 
--- Thêm server HIỆN TẠI vào danh sách đã thử để tránh bị lặp lại chính nó
+-- Đánh dấu server hiện tại là đã thử
 triedServers[game.JobId] = true
--- Lưu lại ngay lập tức
 TeleportService:SetTeleportSetting("TriedServersList", triedServers)
 
--- 🔍 Lấy danh sách server
+-- 🔍 Hàm request an toàn có retry
+local function SafeRequest(url)
+    for i = 1, MAX_RETRIES do
+        local success, response = pcall(function()
+            return request({ Url = url, Method = "GET" })
+        end)
+        if success and response and response.StatusCode == 200 then
+            local ok, data = pcall(function()
+                return HttpService:JSONDecode(response.Body)
+            end)
+            if ok and data and data.data then
+                return data
+            end
+        end
+        task.wait(RETRY_DELAY * i)
+    end
+    return nil
+end
+
+-- 🔎 Lấy danh sách server
 local function GetServers(placeId)
     local servers = {}
     local cursor = ""
@@ -39,88 +61,57 @@ local function GetServers(placeId)
         pageCount += 1
         if pageCount > MAX_PAGES then break end
 
-        local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?limit=50&cursor=%s", placeId, cursor)
-        
-        -- Giả định rằng 'request' là một hàm global hoạt động (ví dụ: trong một môi trường đặc biệt)
-        -- Trong LocalScript chuẩn, bạn sẽ cần dùng RemoteFunction để gọi lên server
-        local success, response = pcall(function()
-            return request({ Url = url, Method = "GET" })
-        end)
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=50&cursor=%s",
+            placeId,
+            HttpService:UrlEncode(cursor)
+        )
 
-        if success and response and response.StatusCode == 200 then
-            local data = HttpService:JSONDecode(response.Body)
-            if data and data.data then
-                for _, server in ipairs(data.data) do
-                    -- ⭐️ THAY ĐỔI QUAN TRỌNG:
-                    -- 1. not triedServers[server.id]: Server chưa từng thử
-                    -- 2. server.playing >= MIN_PLAYER_COUNT: Đủ người tối thiểu
-                    -- 3. server.playing <= MAX_PLAYER_COUNT: Không quá đông
-                    -- 4. server.playing < server.maxPlayers: CHẮC CHẮN CÒN CHỖ TRỐNG (tránh lỗi full 18/18)
-                    if not triedServers[server.id] and
-                       server.playing >= MIN_PLAYER_COUNT and
-                       server.playing <= MAX_PLAYER_COUNT and
-                       server.playing < server.maxPlayers then
-                        
-                        table.insert(servers, server)
-                    end
-                end
-                cursor = data.nextPageCursor or ""
-            else
-                break
+        local data = SafeRequest(url)
+        if not data then break end
+
+        for _, server in ipairs(data.data) do
+            if not triedServers[server.id] and server.playing < server.maxPlayers then
+                table.insert(servers, server)
             end
-        else
-            warn("⚠️ Lỗi khi lấy danh sách server:", response and response.Body)
-            break
         end
+
+        cursor = data.nextPageCursor or ""
+        task.wait(RETRY_DELAY)
     until cursor == ""
 
     return servers
 end
 
--- 🧭 Tìm server
+-- 🎯 Tìm server ngẫu nhiên còn slot
 local function FindServer()
     local allServers = GetServers(PLACE_ID)
     if #allServers == 0 then
-        warn("❌ Không có server nào khả dụng hoặc đã thử tất cả. Đang reset danh sách...")
-        -- Reset danh sách và thêm lại server hiện tại
+        warn("❌ Không còn server khả dụng. Reset danh sách...")
         triedServers = {}
         triedServers[game.JobId] = true
-        TeleportService:SetTeleportSetting("TriedServersList", triedServers) -- Lưu danh sách đã reset
+        TeleportService:SetTeleportSetting("TriedServersList", triedServers)
         return nil
     end
 
-    -- Chọn server ngẫu nhiên trong danh sách hợp lệ
-    local server = allServers[math.random(1, #allServers)]
-    return server
+    return allServers[math.random(1, #allServers)]
 end
 
--- 🔁 Vòng lặp auto hop (sẽ chạy lại mỗi khi vào server mới)
+-- 🔁 Auto hop
 while task.wait(RETRY_DELAY) do
     local targetServer = FindServer()
-    
     if targetServer then
-        warn(string.format("🔄 Chuẩn bị chuyển sang server [ID: %s] có %d/%d người...", targetServer.id:sub(1, 8), targetServer.playing, targetServer.maxPlayers))
-
-        -- ⭐️ ĐÁNH DẤU SERVER SẮP VÀO LÀ "ĐÃ THỬ" TRƯỚC KHI TELEPORT
+        warn(string.format("🔄 Chuyển sang server [%s] - %d/%d người", targetServer.id:sub(1,8), targetServer.playing, targetServer.maxPlayers))
+        
         triedServers[targetServer.id] = true
-        -- LƯU DANH SÁCH NÀY CHO LẦN CHẠY SCRIPT TIẾP THEO (SAU KHI TELEPORT XONG)
         TeleportService:SetTeleportSetting("TriedServersList", triedServers)
 
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(PLACE_ID, targetServer.id, LocalPlayer)
         end)
-        
-        if ok then
-            -- Teleport đã được BẮT ĐẦU. Script sẽ dừng ở đây.
-            -- Khi vào server mới, script sẽ chạy lại từ đầu và đọc 'TriedServersList' đã lưu.
-            break 
-        else
-            -- Lỗi teleport (ví dụ: server vừa đầy ngay trước khi teleport)
-            -- 'triedServers' đã lưu ID này, nên vòng lặp tiếp theo sẽ không chọn lại nó
-            warn("⚠️ Lỗi teleport (server có thể đã đầy):", err)
-        end
+        if ok then break else warn("⚠️ Teleport lỗi:", err) end
     else
-        -- FindServer() trả về nil (do đã reset hoặc đang chờ)
-        warn("⏳ Không tìm thấy server phù hợp, thử lại sau...")
+        warn("⏳ Không có server phù hợp, thử lại...")
+        task.wait(2)
     end
 end
