@@ -4,11 +4,11 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- ⚙️ Cấu hình đúng theo yêu cầu
-local MIN_PLAYER_COUNT = 1
+local MIN_PLAYER_COUNT = 8
 local MAX_PLAYER_COUNT = 18
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 150
-local RETRY_DELAY = 0.5 -- tăng delay để tránh spam request
+local MAX_PAGES = 100
+local RETRY_DELAY = 1 -- tăng delay để tránh spam request
 
 local triedServers = {} -- lưu server đã thử
 
