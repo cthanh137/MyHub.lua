@@ -1,7 +1,7 @@
 --[[
-    🔁 SERVER HOP AUTO LOOP (TÌM SERVER 2 NGƯỜI / DƯỚI 4 NGƯỜI)
-    ✅ Ưu tiên server có đúng 2 người, nếu không có thì tìm ≤4 người.
-    🔄 Tự động lặp lại sau 10 giây đến khi tìm thấy server phù hợp.
+    🔁 SERVER HOP AUTO LOOP (TÌM SERVER 8–15 NGƯỜI)
+    ✅ Tìm server có số người chơi trong khoảng 8 đến 15.
+    🔄 Tự động lặp lại cho đến khi tìm thấy server phù hợp.
     ⚙️ Yêu cầu Executor hỗ trợ request() và TeleportService.
 ]]
 
@@ -11,11 +11,11 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- ⚙️ Cấu hình
-local TARGET_PLAYER_COUNT = 10 -- Ưu tiên đúng 2 người
-local FALLBACK_MAX_PLAYERS = 15 -- Tối đa fallback
+local MIN_PLAYER_COUNT = 8     -- Số người tối thiểu
+local MAX_PLAYER_COUNT = 18    -- Số người tối đa
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 150 -- Số trang quét tối đa
-local RETRY_DELAY = 0.01 -- thời gian chờ giữa mỗi lần quét (giây)
+local MAX_PAGES = 100          -- Giới hạn số trang quét
+local RETRY_DELAY = 1         -- Thời gian lặp lại (giây)
 
 -- 🔍 Hàm lấy danh sách server
 local function GetServers(placeId)
@@ -45,7 +45,6 @@ local function GetServers(placeId)
                 break
             end
         else
-         
             break
         end
     until cursor == ""
@@ -53,7 +52,7 @@ local function GetServers(placeId)
     return servers
 end
 
-
+-- 🧭 Hàm tìm server có từ 8–15 người
 local function FindAndHop()
     local allServers = GetServers(PLACE_ID)
     if #allServers == 0 then
@@ -63,41 +62,30 @@ local function FindAndHop()
 
     local targetServer = nil
 
-
     for _, server in ipairs(allServers) do
-        if server.playing == TARGET_PLAYER_COUNT then
+        if server.playing >= MIN_PLAYER_COUNT and server.playing <= MAX_PLAYER_COUNT then
             targetServer = server
             break
-        end
-    end
-
-   
-    if not targetServer then
-        for _, server in ipairs(allServers) do
-            if server.playing <= FALLBACK_MAX_PLAYERS then
-                targetServer = server
-                break
-            end
         end
     end
 
     return targetServer
 end
 
+-- 🔁 Vòng lặp tự động
 while task.wait(RETRY_DELAY) do
     local targetServer = FindAndHop()
-
     if targetServer then
+        warn(string.format("🔄 Đang chuyển sang server có %d người...", targetServer.playing))
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(PLACE_ID, targetServer.id, LocalPlayer)
         end)
         if ok then
-    
-            break 
+            break
         else
-  
+            warn("⚠️ Lỗi teleport:", err)
         end
     else
-  
+        warn("⏳ Không tìm thấy server phù hợp, thử lại sau...")
     end
 end
