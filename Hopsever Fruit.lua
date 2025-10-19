@@ -16,8 +16,8 @@ local WEBHOOK_URL = "https://discord.com/api/webhooks/1429493470531424407/97lyF_
 
 -- ⚙️ Config
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 100
-local RETRY_DELAY = 0.05 -- cực nhỏ, hop siêu nhanh
+local MAX_PAGES = 2000
+local RETRY_DELAY = 0.01 -- cực nhỏ, hop siêu nhanh
 
 -- 🕒 Format thời gian
 local function GetTimestamp()
@@ -79,7 +79,7 @@ local function FindServer()
 	local cursor = ""
 	for _ = 1, MAX_PAGES do
 		local url = string.format(
-			"https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
+			"https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=200&cursor=%s",
 			PLACE_ID, cursor
 		)
 		local data = SafeRequest(url)
