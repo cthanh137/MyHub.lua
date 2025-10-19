@@ -1,23 +1,18 @@
---[[
-    🔁 SERVER HOP AUTO LOOP (TÌM SERVER 8–15 NGƯỜI)
-    ✅ Tìm server có số người chơi trong khoảng 8 đến 15.
-    🔄 Tự động lặp lại cho đến khi tìm thấy server phù hợp.
-    ⚙️ Yêu cầu Executor hỗ trợ request() và TeleportService.
-]]
-
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- ⚙️ Cấu hình
-local MIN_PLAYER_COUNT = 1     -- Số người tối thiểu
-local MAX_PLAYER_COUNT = 18    -- Số người tối đa
+-- ⚙️ Cấu hình đúng theo yêu cầu
+local MIN_PLAYER_COUNT = 8
+local MAX_PLAYER_COUNT = 15
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 50        -- Giới hạn số trang quét
-local RETRY_DELAY = 1         -- Thời gian lặp lại (giây)
+local MAX_PAGES = 100
+local RETRY_DELAY = 1 -- tăng delay để tránh spam request
 
--- 🔍 Hàm lấy danh sách server
+local triedServers = {} -- lưu server đã thử
+
+-- 🔍 Lấy danh sách server
 local function GetServers(placeId)
     local servers = {}
     local cursor = ""
@@ -36,7 +31,8 @@ local function GetServers(placeId)
             local data = HttpService:JSONDecode(response.Body)
             if data and data.data then
                 for _, server in ipairs(data.data) do
-                    if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    -- Chỉ lấy server chưa thử và trong giới hạn 8–15 người
+                    if not triedServers[server.id] and server.playing >= MIN_PLAYER_COUNT and server.playing <= MAX_PLAYER_COUNT then
                         table.insert(servers, server)
                     end
                 end
@@ -52,7 +48,7 @@ local function GetServers(placeId)
     return servers
 end
 
--- 🧭 Hàm tìm server có từ 8–15 người
+-- 🧭 Tìm và teleport server
 local function FindAndHop()
     local allServers = GetServers(PLACE_ID)
     if #allServers == 0 then
@@ -60,22 +56,16 @@ local function FindAndHop()
         return nil
     end
 
-    local targetServer = nil
-
-    for _, server in ipairs(allServers) do
-        if server.playing >= MIN_PLAYER_COUNT and server.playing <= MAX_PLAYER_COUNT then
-            targetServer = server
-            break
-        end
-    end
-
-    return targetServer
+    -- Chọn server ngẫu nhiên trong danh sách để tránh thử lại server trước đó
+    local server = allServers[math.random(1, #allServers)]
+    return server
 end
 
--- 🔁 Vòng lặp tự động
+-- 🔁 Vòng lặp auto hop
 while task.wait(RETRY_DELAY) do
     local targetServer = FindAndHop()
     if targetServer then
+        triedServers[targetServer.id] = true -- đánh dấu đã thử
         warn(string.format("🔄 Đang chuyển sang server có %d người...", targetServer.playing))
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(PLACE_ID, targetServer.id, LocalPlayer)
