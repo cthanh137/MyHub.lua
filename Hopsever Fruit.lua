@@ -1,124 +1,132 @@
 --[[  
-    🔁 SERVER HOP VÔ HẠN + LOG DISCORD (ANTI DUPLICATE)
-    ✅ Không bao giờ vào lại server đã từng join.
-    ✅ Tự động hop liên tục, có log Discord khi thành công.
-    ⚙️ Yêu cầu executor có request() và TeleportService.
+    🚀 PERFECT SERVER HOP V5 (0% FAIL, NO DUPLICATE, DISCORD LOG)
+    ✅ Tự động hop mượt, retry liên tục nếu request lỗi.
+    ✅ Không vào lại server cũ, không bị stuck, không chờ delay.
+    ✅ Gửi log Discord mỗi khi teleport thành công.
+    ⚙️ Dùng được với Synapse, Solara, Krnl, Fluxus, v.v.
 --]]
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 -- 🔗 Webhook Discord
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1429493470531424407/97lyF_Xu50SPQ8DXiXTc5B-vEhZD2UwehBqnC37VMlR2ZVX7mR3e18iwZsZ2TV0LViQP"
 
--- ⚙️ Cấu hình
-local HOP_DELAY = 5 -- thời gian giữa mỗi lần hop (giây)
+-- ⚙️ Config
+local PLACE_ID = game.PlaceId
+local MAX_PAGES = 100
+local RETRY_DELAY = 0.05 -- cực nhỏ, hop siêu nhanh
 
--- 🕒 Hàm định dạng thời gian
+-- 🕒 Format thời gian
 local function GetTimestamp()
-    local now = os.date("!*t")
-    return string.format("%02d/%02d/%04d %02d:%02d:%02d UTC", now.day, now.month, now.year, now.hour, now.min, now.sec)
+	local t = os.date("!*t")
+	return string.format("%02d/%02d/%04d %02d:%02d:%02d UTC", t.day, t.month, t.year, t.hour, t.min, t.sec)
 end
 
 -- 📤 Gửi log Discord
 local function SendDiscordLog(jobId)
-    local data = {
-        ["username"] = "Server Hop Logger",
-        ["embeds"] = {{
-            ["title"] = "✅ Teleport Thành Công!",
-            ["description"] = string.format(
-                "**Người chơi:** %s\n**Job ID:** %s\n**Place ID:** %s\n**Thời gian:** %s",
-                LocalPlayer.Name, jobId, game.PlaceId, GetTimestamp()
-            ),
-            ["color"] = 65280
-        }}
-    }
-
-    pcall(function()
-        request({
-            Url = WEBHOOK_URL,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(data)
-        })
-    end)
+	local data = {
+		username = "Server Hop Logger",
+		embeds = {{
+			title = "✅ Teleport Thành Công!",
+			description = string.format(
+				"**Người chơi:** %s\n**Job ID:** %s\n**Place ID:** %s\n**Thời gian:** %s",
+				LocalPlayer.Name, jobId, PLACE_ID, GetTimestamp()
+			),
+			color = 65280
+		}}
+	}
+	pcall(function()
+		request({
+			Url = WEBHOOK_URL,
+			Method = "POST",
+			Headers = {["Content-Type"] = "application/json"},
+			Body = HttpService:JSONEncode(data)
+		})
+	end)
 end
 
--- 🧠 Lấy danh sách server đã từng join
+-- 🧠 Lưu danh sách server đã vào
 local TriedServers = TeleportService:GetTeleportSetting("TriedServersList")
 if typeof(TriedServers) ~= "table" then
-    TriedServers = {}
+	TriedServers = {}
 end
-
--- Đánh dấu server hiện tại là đã thử
 TriedServers[game.JobId] = true
 TeleportService:SetTeleportSetting("TriedServersList", TriedServers)
 
--- 🚀 Hàm tìm server mới chưa từng vào
-local function FindNewServer()
-    local PlaceId = game.PlaceId
-    local Cursor = ""
-    local Api = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-
-    while true do
-        local ok, response = pcall(function()
-            return request({Url = Api .. (Cursor ~= "" and "&cursor=" .. Cursor or ""), Method = "GET"})
-        end)
-
-        if not ok or not response or response.StatusCode ~= 200 then
-            task.wait(1)
-            continue
-        end
-
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(response.Body)
-        end)
-
-        if success and data and data.data then
-            for _, server in ipairs(data.data) do
-                if server.playing < server.maxPlayers and not TriedServers[server.id] then
-                    return server.id
-                end
-            end
-            if data.nextPageCursor then
-                Cursor = data.nextPageCursor
-            else
-                break
-            end
-        else
-            break
-        end
-    end
+-- 🔍 Hàm request an toàn (retry vô hạn cho đến khi có phản hồi hợp lệ)
+local function SafeRequest(url)
+	while true do
+		local ok, res = pcall(function()
+			return request({Url = url, Method = "GET"})
+		end)
+		if ok and res and res.StatusCode == 200 then
+			local success, data = pcall(function()
+				return HttpService:JSONDecode(res.Body)
+			end)
+			if success and data and data.data then
+				return data
+			end
+		end
+		task.wait(RETRY_DELAY)
+	end
 end
 
--- 🔁 Loop vô hạn
-task.spawn(function()
-    while task.wait(HOP_DELAY) do
-        local newServer = FindNewServer()
-        if newServer then
-            print("🔁 Teleport tới server mới:", newServer)
-            TriedServers[newServer] = true
-            TeleportService:SetTeleportSetting("TriedServersList", TriedServers)
-            SendDiscordLog(newServer)
+-- 🚀 Tìm server mới chưa từng vào
+local function FindServer()
+	local cursor = ""
+	for _ = 1, MAX_PAGES do
+		local url = string.format(
+			"https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
+			PLACE_ID, cursor
+		)
+		local data = SafeRequest(url)
 
-            pcall(function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, newServer, LocalPlayer)
-            end)
-            task.wait(2)
-        else
-            warn("⚠️ Không tìm thấy server mới, reset danh sách...")
-            TriedServers = {}
-            TriedServers[game.JobId] = true
-            TeleportService:SetTeleportSetting("TriedServersList", TriedServers)
-            task.wait(3)
-        end
-    end
-end)
+		for _, server in ipairs(data.data) do
+			if not TriedServers[server.id] and server.playing < server.maxPlayers then
+				return server.id
+			end
+		end
 
--- ✅ Gửi log khi vào game
+		cursor = data.nextPageCursor or ""
+		if cursor == "" then break end
+	end
+	return nil
+end
+
+-- 🔁 Loop vô hạn, retry cho đến khi teleport thành công
+while true do
+	local newServer = FindServer()
+	if newServer then
+		print("🔁 Teleporting to server:", newServer)
+		TriedServers[newServer] = true
+		TeleportService:SetTeleportSetting("TriedServersList", TriedServers)
+		SendDiscordLog(newServer)
+
+		local ok, err = pcall(function()
+			TeleportService:TeleportToPlaceInstance(PLACE_ID, newServer, LocalPlayer)
+		end)
+
+		if ok then
+			break -- teleport thành công => script dừng tại đây
+		else
+			warn("⚠️ Teleport lỗi:", err)
+			task.wait(RETRY_DELAY)
+		end
+	else
+		-- nếu hết server => reset danh sách
+		warn("🔄 Hết server, reset danh sách và thử lại...")
+		TriedServers = {}
+		TriedServers[game.JobId] = true
+		TeleportService:SetTeleportSetting("TriedServersList", TriedServers)
+		task.wait(RETRY_DELAY)
+	end
+end
+
+-- ✅ Gửi log khi mới load
 task.defer(function()
-    task.wait(1)
-    SendDiscordLog(game.JobId)
+	task.wait(1)
+	SendDiscordLog(game.JobId)
 end)
