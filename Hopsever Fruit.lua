@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local MIN_PLAYER_COUNT = 1
 local MAX_PLAYER_COUNT = 18
 local PLACE_ID = game.PlaceId
-local MAX_PAGES = 50
+local MAX_PAGES = 200
 local RETRY_DELAY = 0.1 -- tăng delay để tránh spam request
 
 local triedServers = {} -- lưu server đã thử
