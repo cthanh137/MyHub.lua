@@ -4,7 +4,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 -- ⚙️ Cấu hình đúng theo yêu cầu
-local MIN_PLAYER_COUNT = 1
+local MIN_PLAYER_COUNT = 5
 local MAX_PLAYER_COUNT = 18
 local PLACE_ID = game.PlaceId
 local MAX_PAGES = 200
