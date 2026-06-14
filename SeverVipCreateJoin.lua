@@ -11,7 +11,7 @@ InterfaceManager.Folder = "FluentSettings"
 
         Transparency = true,
 
-        MenuKeybind = "LeftControl"
+        MenuKeybind = "P"
 
     }
     function InterfaceManager:SetFolder(folder)
