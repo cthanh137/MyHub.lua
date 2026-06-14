@@ -6,7 +6,7 @@ InterfaceManager.Settings = {
     Theme = "Dark",
     Acrylic = true,
     Transparency = true,
-    MenuKeybind = "RightBracket" -- << Đã đổi thành nút ] ở đây
+    MenuKeybind = "P" -- << Đã đổi thành nút ] ở đây
 }
     function InterfaceManager:SetFolder(folder)
 		self.Folder = folder;
