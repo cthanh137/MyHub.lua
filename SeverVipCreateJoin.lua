@@ -107,12 +107,17 @@ InterfaceManager.Folder = "FluentSettings"
 			end
 		})
 	
-		local MenuKeybind = section:AddKeybind("MenuKeybind", { Title = "Minimize Bind", Default = Settings.MenuKeybind })
-		MenuKeybind:OnChanged(function()
-			Settings.MenuKeybind = MenuKeybind.Value
-            InterfaceManager:SaveSettings()
-		end)
-		Library.MinimizeKeybind = MenuKeybind
+local MenuKeybind = section:AddKeybind("MenuKeybind", { 
+    Title = "Minimize Bind", 
+    Default = Settings.MenuKeybind 
+})
+
+MenuKeybind:OnChanged(function()
+    Settings.MenuKeybind = MenuKeybind.Value
+    InterfaceManager:SaveSettings() -- Chỉ lưu cài đặt, KHÔNG thêm lệnh click chuột vào đây
+end)
+
+Library.MinimizeKeybind = MenuKeybind
     end
 end
 
