@@ -1,1 +1,1 @@
-print("Premium")
+print("Rabit")
