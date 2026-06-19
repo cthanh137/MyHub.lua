@@ -5,7 +5,7 @@ InterfaceManager.Folder = "FluentSettings"
 
     InterfaceManager.Settings = {
 
-        Theme = "Dark",
+        Theme = "Darker",
 
         Acrylic = true,
 
