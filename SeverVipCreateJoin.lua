@@ -1,4 +1,45 @@
--- Tạo nút minimize cho FluentPlus
+if CoreGui:FindFirstChild("OpenUI") then
+    CoreGui.OpenUI:Destroy()
+end
+local OpenUI = Instance.new("ScreenGui")
+OpenUI.Name = "OpenUI"
+OpenUI.Parent = CoreGui
+OpenUI.ResetOnSpawn = false
+local Shadow = Instance.new("TextLabel")
+Shadow.Parent = OpenUI
+Shadow.Size = UDim2.fromOffset(55,55)
+Shadow.Position = UDim2.new(0.05,3,0.3,3)
+Shadow.BackgroundTransparency = 1
+Shadow.Text = "🐇"
+Shadow.TextSize = 40
+Shadow.TextColor3 = Color3.fromRGB(0,0,0)
+Shadow.TextTransparency = 0.5
+Shadow.ZIndex = 0
+
+local Button = Instance.new("TextButton")
+Button.Parent = OpenUI
+Button.Size = UDim2.fromOffset(55,55)
+Button.Position = UDim2.new(0.05,0,0.3,0)
+Button.Text = "👑"
+Button.TextSize = 40
+Button.TextColor3 = Color3.new(1,1,1)
+Button.BackgroundTransparency = 1
+Button.BorderSizePixel = 0
+Button.Active = true
+Button.Draggable = true
+Button.AutoButtonColor = true
+Button.ZIndex = 1
+
+Button:GetPropertyChangedSignal("Position"):Connect(function()
+    Shadow.Position = Button.Position + UDim2.fromOffset(3,3)
+end)
+
+Button.MouseButton1Click:Connect(function()
+    VIM:SendKeyEvent(true, Enum.KeyCode.P, false, game)
+    task.wait()
+    VIM:SendKeyEvent(false, Enum.KeyCode.P, false, game)
+end)
+
 
 local httpService = game:GetService("HttpService")
 
