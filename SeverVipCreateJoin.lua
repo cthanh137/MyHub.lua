@@ -1,4 +1,5 @@
 -- Kiểm tra và tạo OpenUI
+-- 🔥 SỬA LỖI: Khai báo CoreGuis
 local CoreGui = game:GetService("CoreGui")
 
 -- Kiểm tra và tạo OpenUI
@@ -38,6 +39,8 @@ Button.Active = true
 Button.Draggable = true
 Button.AutoButtonColor = true
 Button.ZIndex = 1
+
+-- ... phần còn lại của script
 
 -- Đồng bộ vị trí shadow
 Button:GetPropertyChangedSignal("Position"):Connect(function()
