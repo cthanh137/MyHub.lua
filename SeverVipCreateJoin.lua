@@ -1,4 +1,7 @@
 -- Kiểm tra và tạo OpenUI
+local CoreGui = game:GetService("CoreGui")
+
+-- Kiểm tra và tạo OpenUI
 if CoreGui:FindFirstChild("OpenUI") then
     CoreGui.OpenUI:Destroy()
 end
