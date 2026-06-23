@@ -4,7 +4,8 @@ local CoreGui = game:GetService("CoreGui")
 
 local InterfaceManager = {} do
     InterfaceManager.Folder = "FluentSettings"
-    InterfaceManager.Window = nil  -- <-- Thêm
+    InterfaceManager.Window = nil  -- sẽ được gán
+    InterfaceManager.Library = nil
 
     InterfaceManager.Settings = {
         Theme = "Darker",
@@ -30,7 +31,6 @@ local InterfaceManager = {} do
         self.Library = library
     end
 
-    -- Thêm hàm SetWindow
     function InterfaceManager:SetWindow(window)
         self.Window = window
     end
@@ -119,18 +119,8 @@ local InterfaceManager = {} do
             Default = Settings.MenuKeybind,
             Mode = "Toggle",
             Callback = function(Value)
-                if Value then
-                    if InterfaceManager.Window then
-                        if InterfaceManager.Window.Frame.Visible then
-                            InterfaceManager.Window:Minimize()
-                        else
-                            if InterfaceManager.Window.Show then
-                                InterfaceManager.Window:Show()
-                            else
-                                InterfaceManager.Window.Frame.Visible = true
-                            end
-                        end
-                    end
+                if Value and self.Window then
+                    self.Window.Frame.Visible = not self.Window.Frame.Visible
                 end
             end,
             ChangedCallback = function(New)
@@ -145,10 +135,11 @@ local InterfaceManager = {} do
 
     function InterfaceManager:CreateOpenButton()
         if not self.Window then
-            warn("InterfaceManager: Window chưa được set, gọi SetWindow() trước.")
+            warn("InterfaceManager: Window not set, cannot create open button.")
             return
         end
 
+        -- Xóa nút cũ
         if CoreGui:FindFirstChild("OpenUI") then
             CoreGui.OpenUI:Destroy()
         end
@@ -196,6 +187,7 @@ local InterfaceManager = {} do
         Glow.ImageTransparency = 0.8
         Glow.ZIndex = 0
 
+        -- Hover
         Button.MouseEnter:Connect(function()
             TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(60, 60)}):Play()
             TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(60, 60, 90)}):Play()
@@ -208,26 +200,18 @@ local InterfaceManager = {} do
             TweenService:Create(Glow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.8}):Play()
         end)
 
+        -- Click
         Button.MouseButton1Click:Connect(function()
             TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(45, 45)}):Play()
             task.wait(0.1)
             TweenService:Create(Button, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(55, 55)}):Play()
 
-            -- Sử dụng self.Window đã lưu
-            local Window = InterfaceManager.Window
-            if Window then
-                if Window.Frame.Visible then
-                    Window:Minimize()
-                else
-                    if Window.Show then
-                        Window:Show()
-                    else
-                        Window.Frame.Visible = true
-                    end
-                end
+            if self.Window then
+                self.Window.Frame.Visible = not self.Window.Frame.Visible
             end
         end)
 
+        -- Loop glow
         task.spawn(function()
             while true do
                 TweenService:Create(Glow, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {ImageTransparency = 0.6}):Play()
