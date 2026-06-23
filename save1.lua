@@ -1,4 +1,7 @@
 local httpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService") -- (dùng nếu cần)
 
 local InterfaceManager = {} do
     InterfaceManager.Folder = "FluentSettings"
@@ -10,7 +13,7 @@ local InterfaceManager = {} do
         MenuKeybind = "P"
     }
 
-    -- ⭐ Thêm hàm split cho string
+    -- Hàm tách chuỗi (hỗ trợ cả / và \)
     local function splitString(str, delimiter)
         local result = {}
         for match in (str..delimiter):gmatch("(.-)"..delimiter) do
@@ -30,7 +33,7 @@ local InterfaceManager = {} do
 
     function InterfaceManager:BuildFolderTree()
         local paths = {}
-        local parts = splitString(self.Folder, "/") -- ⭐ Sửa ở đây
+        local parts = splitString(self.Folder, "/")
         
         for idx = 1, #parts do
             paths[#paths + 1] = table.concat(parts, "/", 1, idx)
@@ -112,19 +115,17 @@ local InterfaceManager = {} do
             end
         })
 
-        -- ⭐ SỬA LẠI PHẦN KEYBIND
+        -- Keybind để toggle minimize
         local MenuKeybind = section:AddKeybind("MenuKeybind", {
             Title = "Minimize Bind",
             Default = Settings.MenuKeybind,
             Mode = "Toggle",
             Callback = function(Value)
                 if Value then
-                    -- Khi nhấn phím, toggle minimize
                     if Library.Window then
                         if Library.Window.Frame.Visible then
                             Library.Window:Minimize()
                         else
-                            -- Nếu đã ẩn thì hiện lại
                             if Library.Window.Show then
                                 Library.Window:Show()
                             else
@@ -137,17 +138,124 @@ local InterfaceManager = {} do
             ChangedCallback = function(New)
                 Settings.MenuKeybind = New
                 InterfaceManager:SaveSettings()
-                -- Cập nhật MinimizeKeybind cho Library
                 Library.MinimizeKeybind = New
             end
         })
 
-        -- Set giá trị ban đầu
         MenuKeybind:SetValue(Settings.MenuKeybind)
-
-        -- ⭐ Gán đúng cách
         Library.MinimizeKeybind = MenuKeybind.Value
     end
+
+    -- ==================== THÊM PHẦN NÚT MỞ UI ====================
+    function InterfaceManager:CreateOpenButton()
+        if not self.Library or not self.Library.Window then
+            warn("InterfaceManager: Library hoặc Window chưa được khởi tạo, không thể tạo nút OpenUI.")
+            return
+        end
+
+        local Library = self.Library
+
+        -- Xóa nút cũ nếu tồn tại
+        if CoreGui:FindFirstChild("OpenUI") then
+            CoreGui.OpenUI:Destroy()
+        end
+
+        -- Tạo ScreenGui
+        local OpenUI = Instance.new("ScreenGui")
+        OpenUI.Name = "OpenUI"
+        OpenUI.Parent = CoreGui
+        OpenUI.ResetOnSpawn = false
+
+        -- Nút chính
+        local Button = Instance.new("ImageButton")
+        Button.Parent = OpenUI
+        Button.Size = UDim2.fromOffset(55, 55)
+        Button.Position = UDim2.new(0.02, 0, 0.3, 0)
+        Button.Image = "rbxassetid://6768917255"
+        Button.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+        Button.BorderSizePixel = 0
+        Button.BackgroundTransparency = 0.1
+        Button.ClipsDescendants = true
+        Button.ZIndex = 2
+        Button.AutoButtonColor = false
+        Button.Active = true
+        Button.Draggable = true
+
+        -- Bo góc (hình tròn)
+        local UICorner = Instance.new("UICorner")
+        UICorner.Parent = Button
+        UICorner.CornerRadius = UDim.new(1, 0)
+
+        -- Đổ bóng
+        local Shadow = Instance.new("ImageLabel")
+        Shadow.Parent = Button
+        Shadow.Size = UDim2.fromScale(1, 1)
+        Shadow.Position = UDim2.fromOffset(3, 3)
+        Shadow.BackgroundTransparency = 1
+        Shadow.Image = "rbxassetid://6768917255"
+        Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+        Shadow.ImageTransparency = 0.5
+        Shadow.ZIndex = 0
+
+        -- Hiệu ứng phát sáng
+        local Glow = Instance.new("ImageLabel")
+        Glow.Parent = Button
+        Glow.Size = UDim2.fromScale(1.3, 1.3)
+        Glow.Position = UDim2.new(-0.15, 0, -0.15, 0)
+        Glow.BackgroundTransparency = 1
+        Glow.Image = "rbxassetid://6768917255"
+        Glow.ImageColor3 = Color3.fromRGB(100, 50, 255)
+        Glow.ImageTransparency = 0.8
+        Glow.ZIndex = 0
+
+        -- ---- Sự kiện hover ----
+        Button.MouseEnter:Connect(function()
+            TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(60, 60)}):Play()
+            TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(60, 60, 90)}):Play()
+            TweenService:Create(Glow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.5}):Play()
+        end)
+
+        Button.MouseLeave:Connect(function()
+            TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(55, 55)}):Play()
+            TweenService:Create(Button, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(40, 40, 60)}):Play()
+            TweenService:Create(Glow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.8}):Play()
+        end)
+
+        -- ---- Sự kiện click (toggle window) ----
+        Button.MouseButton1Click:Connect(function()
+            -- Hiệu ứng nhấn
+            TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(45, 45)}):Play()
+            task.wait(0.1)
+            TweenService:Create(Button, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(55, 55)}):Play()
+
+            -- Thực hiện toggle (giống logic trong Keybind)
+            if Library.Window then
+                if Library.Window.Frame.Visible then
+                    Library.Window:Minimize()
+                else
+                    if Library.Window.Show then
+                        Library.Window:Show()
+                    else
+                        Library.Window.Frame.Visible = true
+                    end
+                end
+            end
+        end)
+
+        -- ---- Vòng lặp làm mờ/ sáng glow ----
+        task.spawn(function()
+            while true do
+                TweenService:Create(Glow, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {ImageTransparency = 0.6}):Play()
+                task.wait(2)
+                TweenService:Create(Glow, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {ImageTransparency = 0.8}):Play()
+                task.wait(2)
+            end
+        end)
+
+        -- (Tuỳ chọn) Cập nhật vị trí nút nếu cửa sổ bị kéo? Không cần.
+    end
+    -- ============================================================
+
 end
 
 return InterfaceManager
