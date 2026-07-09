@@ -954,7 +954,7 @@ function Library:CreateWindow(options)
                         Set = internalSet,
                         Get = function() return selected end
                     }
-                local DropdownObject = {
+                 local DropdownObject = {
                         Set = internalSet,
                         Get = function() return selected end,
                         
@@ -1027,8 +1027,6 @@ function Library:CreateWindow(options)
                     
                     -- QUAN TRỌNG: Phải return object này ra ngoài thì code ở ngoài mới gọi được
                     return DropdownObject 
-                end
-                    return dropLogic
                 end
 
                 function Elements:AddTextbox(name, placeholder, callback, infoData)
