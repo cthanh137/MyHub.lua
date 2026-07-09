@@ -959,34 +959,39 @@ function Library:CreateWindow(options)
                         Get = function() return selected end,
                         
                         -- HÀM MỚI: Cập nhật lại danh sách options
-                        SetValues = function(newOptions)
-                            options = newOptions -- Cập nhật biến options gốc
+                SetValues = function(newOptions)
+                            -- 1. Đóng dropdown nếu đang mở để tránh lỗi visual
+                            if dropped then
+                                toggleDrop(false)
+                            end
                             
-                            -- 1. Xóa toàn bộ button cũ trong ListFrame
+                            options = newOptions
+                            
+                            -- 2. Reset search để đảm bảo tất cả button mới đều visible
+                            SearchBox.Text = ""
+                            
+                            -- 3. Xóa toàn bộ button cũ
                             for _, btn in ipairs(optionButtons) do
                                 btn:Destroy()
                             end
-                            optionButtons = {} -- Reset table chứa button
+                            optionButtons = {}
                             
-                            -- 2. Kiểm tra xem giá trị đang chọn có còn trong list mới không
-                            local stillValid = false
+                            -- 4. Reset lại giá trị đang chọn
                             if isMulti then
-                                -- Với multi select, lọc lại những cái không còn tồn tại
                                 local newSelected = {}
                                 for _, sel in ipairs(selected) do
-                                    if table.find(options, sel) then table.insert(newSelected, sel) end
+                                    if table.find(options, sel) then 
+                                        table.insert(newSelected, sel) 
+                                    end
                                 end
                                 selected = newSelected
                             else
-                                -- Với single select, nếu cái đang chọn không còn nữa thì reset
-                                if table.find(options, selected) then
-                                    stillValid = true
-                                else
+                                if not table.find(options, selected) then
                                     selected = options[1] or nil
                                 end
                             end
 
-                            -- 3. Tạo lại các button mới từ list mới
+                            -- 5. Tạo lại các button mới
                             for _, opt in pairs(options) do
                                 local isInitialSelected = (not isMulti and selected == opt)
                                 local OptBtn = Create("TextButton", {
@@ -1001,11 +1006,17 @@ function Library:CreateWindow(options)
                                 })
                                 table.insert(optionButtons, OptBtn)
                                 
-                                -- Gán lại sự kiện click
                                 OptBtn.MouseButton1Click:Connect(function()
+                                    -- Không cho click vào placeholder
+                                    if opt == "No Weapons Found" then return end
+                                    
                                     if isMulti then
                                         local idx = table.find(selected, opt)
-                                        if idx then table.remove(selected, idx) else table.insert(selected, opt) end
+                                        if idx then 
+                                            table.remove(selected, idx) 
+                                        else 
+                                            table.insert(selected, opt) 
+                                        end
                                         internalSet(selected)
                                     else
                                         internalSet(opt)
@@ -1014,14 +1025,18 @@ function Library:CreateWindow(options)
                                 end)
                             end
                             
-                            -- 4. Cập nhật lại UI Text và CanvasSize
+                            -- 6. Cập nhật text hiển thị
                             UpdateText()
-                            ListFrame.CanvasSize = UDim2.new(0, 0, 0, #options * 25)
                             
-                            -- 5. Bắn callback để báo ra ngoài
+                            -- 7. Đợi 1 frame để UIListLayout tính toán lại AbsoluteContentSize
+                            task.spawn(function()
+                                task.wait()
+                                ListFrame.CanvasSize = UDim2.new(0, 0, 0, DList.AbsoluteContentSize.Y)
+                            end)
+                            
+                            -- 8. Bắn callback
                             if callback then callback(selected) end
                         end
-                    }
 
                     Window.ConfigElements[name] = DropdownObject
                     
