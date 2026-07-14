@@ -1,18 +1,22 @@
--- ====== SCRIPT HOP SERVER NÂNG CAO ======
--- Có thể tùy chỉnh số người chơi mong muốn
+-- ====== SCRIPT HOP SERVER SMART ======
+-- Tự động tìm và hop đến server không full
+-- Lưu lịch sử server đã đi qua để tránh hop lại
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 -- ====== CẤU HÌNH ======
 local CONFIG = {
-    HISTORY_FILE = "server_history.txt",
-    HISTORY_EXPIRE_TIME = 900, -- 15 phút
-    PREFER_PLAYERS = 3,        -- Số người chơi lý tưởng (0 = bất kỳ)
-    MIN_PLAYERS = 1,           -- Số người chơi tối thiểu
-    MAX_RETRIES = 3,
-    DEBUG_MODE = true
+    HISTORY_FILE = "serversave.txt",    -- File lưu lịch sử
+    MIN_PLAYERS = 1,                    -- Số người tối thiểu
+    MAX_PLAYERS = 20,                   -- Số người tối đa muốn (0 =不限)
+    PREFER_PLAYERS = 5,                 -- Số người lý tưởng
+    MAX_RETRIES = 3,                    -- Số lần thử tối đa
+    SAVE_HISTORY = true,                -- Bật/tắt lưu lịch sử
+    DEBUG_MODE = true,
+    AUTO_HOP = true                     -- Tự động hop hay chỉ hiển thị
 }
 
 -- ====== LOGGING ======
@@ -24,52 +28,113 @@ local function Log(message, type)
         error = "❌",
         warning = "⚠️",
         progress = "🔄",
-        found = "🎯"
+        found = "🎯",
+        skip = "⏭️",
+        save = "💾",
+        load = "📂"
     }
     print((prefix[type] or "📌") .. " " .. message)
 end
 
--- ====== QUẢN LÝ LỊCH SỬ ======
-local function GetServerHistory()
-    if readfile and isfile and isfile(CONFIG.HISTORY_FILE) then
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(CONFIG.HISTORY_FILE))
-        end)
-        if success and type(data) == "table" then
-            return data
-        end
+-- ====== QUẢN LÝ LỊCH SỬ SERVER ======
+
+-- Kiểm tra file tồn tại
+local function FileExists(fileName)
+    if not isfile then return false end
+    local success, result = pcall(function()
+        return isfile(fileName)
+    end)
+    return success and result
+end
+
+-- Đọc lịch sử từ file
+local function LoadHistory()
+    if not FileExists(CONFIG.HISTORY_FILE) then
+        Log("Chua co lich su hop server!", "info")
+        return {}
     end
+    
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(readfile(CONFIG.HISTORY_FILE))
+    end)
+    
+    if success and type(data) == "table" then
+        Log("Da doc lich su: " .. #data .. " server da di qua", "load")
+        return data
+    end
+    
     return {}
 end
 
-local function SaveServerToHistory(jobId)
-    if writefile then
-        local history = GetServerHistory()
-        history[jobId] = os.time()
-        
-        local cleanHistory = {}
-        for id, timestamp in pairs(history) do
-            if os.time() - timestamp < CONFIG.HISTORY_EXPIRE_TIME then
-                cleanHistory[id] = timestamp
-            end
-        end
-        
-        local encodedData = HttpService:JSONEncode(cleanHistory)
-        pcall(function()
-            writefile(CONFIG.HISTORY_FILE, encodedData)
-        end)
+-- Lưu lịch sử vào file
+local function SaveHistory(history)
+    if not CONFIG.SAVE_HISTORY then return end
+    if not writefile then 
+        Log("Khong ho tro writefile!", "warning")
+        return 
+    end
+    
+    local success, err = pcall(function()
+        local encoded = HttpService:JSONEncode(history)
+        writefile(CONFIG.HISTORY_FILE, encoded)
+    end)
+    
+    if success then
+        Log("Da luu lich su: " .. #history .. " server", "save")
+    else
+        Log("Loi luu file: " .. tostring(err), "error")
     end
 end
 
+-- Thêm server vào lịch sử
+local function AddToHistory(history, jobId)
+    if not history then history = {} end
+    
+    -- Kiểm tra đã tồn tại chưa
+    for _, id in ipairs(history) do
+        if id == jobId then
+            return history
+        end
+    end
+    
+    -- Thêm mới
+    table.insert(history, jobId)
+    
+    -- Giới hạn số lượng (giữ 100 server gần nhất)
+    if #history > 100 then
+        table.remove(history, 1)
+    end
+    
+    return history
+end
+
+-- Kiểm tra server đã đi qua chưa
+local function IsServerVisited(history, jobId)
+    if not history then return false end
+    for _, id in ipairs(history) do
+        if id == jobId then
+            return true
+        end
+    end
+    return false
+end
+
 -- ====== LẤY DANH SÁCH SERVER ======
-local function GetServerList()
+local function GetServerList(history)
     local currentId = game.JobId
-    local history = GetServerHistory()
     local availableServers = {}
     local cursor = ""
+    local pageCount = 0
+    local visitedCount = 0
     
-    for page = 1, 10 do
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=50&cursor=" .. cursor
+    Log("Dang tim kiem server...", "progress")
+    Log("Server hien tai: " .. currentId, "info")
+    Log("Da di qua " .. #history .. " server", "info")
+    
+    while pageCount < 5 do
+        pageCount = pageCount + 1
+        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100&cursor=" .. cursor
+        
         local success, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
@@ -79,20 +144,35 @@ local function GetServerList()
         end
         
         for _, server in ipairs(result.data) do
-            -- Lọc server
+            -- Kiểm tra điều kiện
+            local isVisited = IsServerVisited(history, server.id)
+            
+            -- Bỏ qua server hiện tại và server đã đi qua
             if server.id ~= currentId 
-               and not history[server.id]
+               and not isVisited
                and server.playing >= CONFIG.MIN_PLAYERS
                and server.playing < server.maxPlayers then
                 
-                table.insert(availableServers, {
-                    id = server.id,
-                    players = server.playing,
-                    maxPlayers = server.maxPlayers,
-                    ping = server.ping or 0,
-                    region = server.region or "Unknown"
-                })
+                -- Kiểm tra số người chơi tối đa
+                if CONFIG.MAX_PLAYERS > 0 and server.playing > CONFIG.MAX_PLAYERS then
+                    -- Bỏ qua nếu quá đông
+                else
+                    table.insert(availableServers, {
+                        id = server.id,
+                        players = server.playing,
+                        maxPlayers = server.maxPlayers,
+                        ping = server.ping or 0,
+                        region = server.region or "Unknown",
+                        fps = server.fps or 60
+                    })
+                end
+            elseif isVisited then
+                visitedCount = visitedCount + 1
             end
+        end
+        
+        if #availableServers >= 20 then
+            break
         end
         
         if result.nextPageCursor and result.nextPageCursor ~= "" then
@@ -100,6 +180,12 @@ local function GetServerList()
         else
             break
         end
+        
+        task.wait(0.1)
+    end
+    
+    if visitedCount > 0 then
+        Log("Bo qua " .. visitedCount .. " server da di qua", "skip")
     end
     
     return availableServers
@@ -109,97 +195,172 @@ end
 local function SelectBestServer(servers)
     if #servers == 0 then return nil end
     
-    -- Sắp xếp theo số người chơi gần với PREFER_PLAYERS nhất
+    -- Sắp xếp theo tiêu chí
     table.sort(servers, function(a, b)
+        -- Ưu tiên số người gần với PREFER_PLAYERS nhất
         local diffA = math.abs(a.players - CONFIG.PREFER_PLAYERS)
         local diffB = math.abs(b.players - CONFIG.PREFER_PLAYERS)
-        return diffA < diffB
+        
+        if diffA ~= diffB then
+            return diffA < diffB
+        end
+        
+        -- Nếu bằng nhau, ưu tiên ping thấp
+        return a.ping < b.ping
     end)
     
     return servers[1]
 end
 
--- ====== HOP SERVER CHÍNH ======
-local function HopToDifferentServer()
-    Log("Đang tìm kiếm server mới...", "info")
-    Log("Server hiện tại: " .. game.JobId, "info")
+-- ====== HIỂN THỊ DANH SÁCH ======
+local function DisplayServerList(servers)
+    if #servers == 0 then
+        print("")
+        Log("KHONG TIM THAY SERVER MOI!", "error")
+        print("==================================================")
+        print("Ly do co the:")
+        print("  • Tat ca server deu full")
+        print("  • Tat ca server deu da di qua")
+        print("  • Khong co server phu hop")
+        print("==================================================")
+        return
+    end
     
-    -- Lưu server hiện tại
-    SaveServerToHistory(game.JobId)
+    print("")
+    Log("TIM THAY " .. #servers .. " SERVER MOI!", "found")
+    print("-------------------------------------------------------")
+    print(string.format(" %-3s | %-10s | %-8s | %-10s", 
+        "STT", "Nguoi choi", "Ping", "Region"))
+    print("-------------------------------------------------------")
+    
+    for i, server in ipairs(servers) do
+        local shortId = string.sub(server.id, 1, 6) .. "..."
+        local players = server.players .. "/" .. server.maxPlayers
+        local ping = server.ping .. "ms"
+        local region = server.region
+        
+        print(string.format(" %-3s | %-10s | %-8s | %-10s", 
+            i, players, ping, region))
+    end
+    print("-------------------------------------------------------")
+end
+
+-- ====== HOP SERVER ======
+local function HopToServer(targetServer)
+    if not targetServer then return false end
+    
+    Log("Dang hop den server: " .. targetServer.id, "progress")
+    Log("So nguoi choi: " .. targetServer.players .. "/" .. targetServer.maxPlayers, "info")
+    Log("Ping: " .. targetServer.ping .. "ms", "info")
+    Log("Region: " .. targetServer.region, "info")
+    
     task.wait(0.5)
+    
+    local success, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServer.id, Players.LocalPlayer)
+    end)
+    
+    if not success then
+        Log("Loi hop: " .. tostring(err), "error")
+        return false
+    end
+    
+    return true
+end
+
+-- ====== MAIN FUNCTION ======
+local function SmartHop()
+    print("")
+    print("==================================================")
+    print("        SMART HOP SERVER")
+    print("==================================================")
+    print("")
+    
+    -- Đợi game load
+    if not game:IsLoaded() then
+        Log("Cho game load...", "progress")
+        game.Loaded:Wait()
+    end
+    
+    task.wait(0.5)
+    
+    -- Load lịch sử
+    local history = LoadHistory()
+    local currentServer = game.JobId
+    
+    -- Thêm server hiện tại vào lịch sử nếu chưa có
+    history = AddToHistory(history, currentServer)
+    SaveHistory(history)
     
     local attempts = 0
     local allServers = {}
     
     while attempts < CONFIG.MAX_RETRIES do
         attempts = attempts + 1
-        Log("Lần thử " .. attempts .. "/" .. CONFIG.MAX_RETRIES, "progress")
+        Log("Lan thu " .. attempts .. "/" .. CONFIG.MAX_RETRIES, "progress")
         
-        allServers = GetServerList()
+        allServers = GetServerList(history)
         
         if #allServers > 0 then
             break
         end
         
         if attempts < CONFIG.MAX_RETRIES then
-            Log("Chưa tìm thấy server, thử lại sau 2s...", "warning")
+            Log("Chua tim thay server moi, thu lai sau 2s...", "warning")
             task.wait(2)
         end
     end
     
-    -- Xử lý kết quả
-    if #allServers > 0 then
-        Log("Đã tìm thấy " .. #allServers .. " server khả dụng", "success")
+    -- Hiển thị danh sách
+    DisplayServerList(allServers)
+    
+    -- Chọn server tốt nhất
+    local targetServer = SelectBestServer(allServers)
+    
+    if targetServer then
+        print("")
+        Log("SERVER TOT NHAT:", "found")
+        print(string.format("   ID: %s", targetServer.id))
+        print(string.format("   Nguoi choi: %d/%d", targetServer.players, targetServer.maxPlayers))
+        print(string.format("   Ping: %sms", targetServer.ping))
+        print(string.format("   Region: %s", targetServer.region))
+        print("")
         
-        -- In danh sách server
-        if CONFIG.DEBUG_MODE then
-            Log("Danh sách server:", "info")
-            for i, server in ipairs(allServers) do
-                print(string.format("  %d. %s (%d/%d người) - %s", 
-                    i, server.id, server.players, server.maxPlayers, server.region))
+        if CONFIG.AUTO_HOP then
+            -- Lưu server vào lịch sử trước khi hop
+            history = AddToHistory(history, targetServer.id)
+            SaveHistory(history)
+            
+            -- Thực hiện hop
+            if HopToServer(targetServer) then
+                Log("Hop thanh cong!", "success")
+                return true
+            else
+                Log("Hop that bai!", "error")
+                return false
             end
-        end
-        
-        local targetServer = SelectBestServer(allServers)
-        if targetServer then
-            Log("Chọn server: " .. targetServer.id .. " (" .. targetServer.players .. "/" .. targetServer.maxPlayers .. " người)", "found")
-            Log("Đang kết nối...", "progress")
-            
-            task.wait(0.3)
-            pcall(function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, targetServer.id, Players.LocalPlayer)
-            end)
-            
+        else
+            Log("Che do xem truoc - Khong tu dong hop", "info")
+            print("De hop, copy JobId: " .. targetServer.id)
+            print('TeleportService:TeleportToPlaceInstance(' .. game.PlaceId .. ', "' .. targetServer.id .. '", game.Players.LocalPlayer)')
             return true
         end
+    else
+        Log("Khong tim thay server phu hop!", "error")
+        print("")
+        print("Giai phap:")
+        print("  1. Xoa file serversave.txt de reset lich su")
+        print("  2. Doi cau hinh MIN_PLAYERS hoac MAX_PLAYERS")
+        print("  3. Thu lai sau")
+        return false
     end
-    
-    -- Không tìm thấy server -> teleport ngẫu nhiên
-    Log("Không tìm thấy server phù hợp!", "error")
-    Log("Teleport ngẫu nhiên...", "warning")
-    task.wait(0.5)
-    pcall(function()
-        TeleportService:Teleport(game.PlaceId, Players.LocalPlayer)
-    end)
-    
-    return false
 end
 
--- ====== KHỞI CHẠY ======
-
-
-if not game:IsLoaded() then
-    Log("Đợi game load...", "progress")
-    game.Loaded:Wait()
-end
-
-task.wait(1)
-
--- Bắt đầu
-local success = HopToDifferentServer()
-
-if success then
-    Log("Đã thực hiện hop server!", "success")
-else
-    Log("Hop server thất bại!", "error")
+-- ====== CHẠY SCRIPT ======
+local success, err = pcall(SmartHop)
+if not success then
+    Log("LOI: " .. tostring(err), "error")
+    print("")
+    print("Stack trace:")
+    print(err)
 end
